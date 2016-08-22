@@ -1,0 +1,24 @@
+# Wingtech configuration options
+
+config MACH_WILEYFOX
+	bool "Wileyfox device"
+	depends on ARCH_MSM
+	help
+	  Support for Wileyfox products
+
+config MACH_WILEYFOX_MSM8916
+	bool "Wileyfox MSM8916"
+	depends on ARCH_MSM8916
+	select MACH_WILEYFOX
+	help
+	  Support for MSM8916 Wileyfox variants
+
+menu "Wileyfox board selection"
+
+config MACH_CRACKLING
+	bool "CRACKLING board"
+	select MACH_WILEYFOX_MSM8916
+	help
+	  Support for Wileyfox CRACKLING Swift variant
+
+endmenu
