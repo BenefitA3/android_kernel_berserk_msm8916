@@ -13,9 +13,10 @@
   8.Radio
   9.WiFi
   10.Autorotation
-  11.Partiarly work Autobrightness sensor
+  11.Autobrightness sensor
+  12.Proximity sensor
   ... More
  
  Not work/Bugs:
  
-  3.Brightness bug
+  Nothing
