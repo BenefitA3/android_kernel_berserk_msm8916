@@ -1,4 +1,4 @@
-qcom,l8150-jd-4v35-2500mah-data {
+qcom,crackling-jd-4v35-2500mah-data {
 	qcom,fcc-mah = <2500>;
 	qcom,default-rbatt-mohm = <161>;
 	qcom,rbatt-capacitive-mohm = <0>;

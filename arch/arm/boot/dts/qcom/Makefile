@@ -82,8 +82,6 @@ ifeq ($(CONFIG_MACH_CKT_MSM8939),y)
 dtb-$(CONFIG_ARCH_MSM8916) += msm8939-spirit.dtb
 else ifeq ($(CONFIG_MACH_HAIER_MSM8916),y)
 dtb-$(CONFIG_ARCH_MSM8916) += msm8916-g36c1h.dtb
-else ifeq ($(CONFIG_MACH_LONGCHEER_MSM8916),y)
-dtb-$(CONFIG_ARCH_MSM8916) += msm8916-qrd-l8150.dtb
 else ifeq ($(CONFIG_MACH_HUAQIN_MSM8916),y)
 dtb-$(CONFIG_ARCH_MSM8916) += msm8916-ql790.dtb
 else ifeq ($(CONFIG_MACH_WILEYFOX_MSM8916),y)

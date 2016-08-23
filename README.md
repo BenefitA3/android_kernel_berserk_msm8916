@@ -8,10 +8,14 @@
   3.Touch Panel
   4.Camera
   5.Sound
+  6.Charging
+  7.USB Connecting
+  8.Radio
+  9.WiFi
+  10.Autorotation
+  11.Partiarly work Autobrightness sensor
   ... More
  
  Not work/Bugs:
  
-  1.Charging
-  2.USB Connecting
   3.Brightness bug
