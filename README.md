@@ -25,5 +25,6 @@ Compilation:
 
     export ARCH=arm
     export CROSS_COMPILE=/path_to_your_toolchain/
+    make cyanogenmod_crackling_defconfig
     make zImage-dtb
 Check arch/arm/boot/ folder
