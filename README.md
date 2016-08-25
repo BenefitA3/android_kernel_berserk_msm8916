@@ -7,6 +7,7 @@ Working:
 - Touch Panel
 - RIL
 - Charging
+- Camera(full work)
 - USB Connecting
 - Radio
 - Wi-Fi
@@ -18,7 +19,7 @@ Working:
 ... More
 
 Not work/Bugs:
-- Camera
+- Nothing
 
 Compilation:
 
