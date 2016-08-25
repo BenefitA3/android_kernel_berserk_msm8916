@@ -1,11 +1,10 @@
-#This is a berserk kernel for Wileyfox Swift(crackling)
+#This is a berserk kernel for ARK Benefit A3(peach)
  This is a rebase kernel from Wingtech WT88047
 
 Working:
 - Start
 - LCD Panel
 - Touch Panel
-- Camera(full work)
 - RIL
 - Charging
 - USB Connecting
@@ -19,12 +18,12 @@ Working:
 ... More
 
 Not work/Bugs:
-- Nothing
+- Camera
 
 Compilation:
 
     export ARCH=arm
     export CROSS_COMPILE=/path_to_your_toolchain/
-    make cyanogenmod_crackling_defconfig
+    make cyanogenmod_peach_defconfig
     make zImage-dtb
 Check arch/arm/boot/ folder
