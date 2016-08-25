@@ -31,7 +31,6 @@
 #include <linux/debugfs.h>
 #include <linux/sensors.h>
 #include <linux/input/ft5x06_ts.h>
-#include <linux/power_supply.h>
 
 #if defined(CONFIG_FB)
 #include <linux/notifier.h>
@@ -124,11 +123,6 @@
 #define FT_FW_START_REG		0xBF
 
 #define FT_STATUS_NUM_TP_MASK	0x0F
-
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-#include <linux/input/prevent_sleep.h>
-bool dit_suspend = false;
-#endif
 
 #define FT_VTG_MIN_UV		2600000
 #define FT_VTG_MAX_UV		3300000
@@ -244,17 +238,6 @@ enum {
 
 #define FT_DEBUG_DIR_NAME	"ts_debug"
 
-#ifdef CONFIG_MACH_WT88047
-#define CTP_CHARGER_DETECT 0
-#endif
-
-#if CTP_CHARGER_DETECT
-extern int power_supply_get_battery_charge_state(struct power_supply *psy);
-struct power_supply *batt_psy;
-static u8 is_charger_plug;
-static u8 pre_charger_status;
-#endif
-
 struct ft5x06_ts_data {
 	struct i2c_client *client;
 	struct input_dev *input_dev;
@@ -269,9 +252,6 @@ struct ft5x06_ts_data {
 	struct dentry *dir;
 	u16 addr;
 	bool suspended;
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	bool prevent_sleep;
-#endif
 	char *ts_info;
 	u8 *tch_data;
 	u32 tch_data_len;
@@ -718,21 +698,6 @@ static irqreturn_t ft5x06_ts_interrupt(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-#if CTP_CHARGER_DETECT
-	if (!batt_psy) {
-		pr_err("%s: tp interrupt battery supply not found\n", __func__);
-		batt_psy = power_supply_get_by_name("usb");
-	} else {
-		is_charger_plug = (u8)power_supply_get_battery_charge_state(batt_psy);
-		pr_debug("%s: 1 is_charger_plug %d, prev %d", __func__, is_charger_plug, pre_charger_status);
-		if (is_charger_plug != pre_charger_status) {
-			pre_charger_status = is_charger_plug;
-			ft5x0x_write_reg(data->client, 0x8B, is_charger_plug);
-			pr_debug("%s: 2 is_charger_plug %d, prev %d", __func__, is_charger_plug, pre_charger_status);
-		}
-	}
-#endif
-
 	ip_dev = data->input_dev;
 	buf = data->tch_data;
 
@@ -1055,70 +1020,11 @@ err_pinctrl_get:
 	return retval;
 }
 
-static int dt2w_toggle_rebalance_irq(struct device *dev)
-{
-	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
-
-	/* 
-	 * Prema Chand Alugu (premaca@gmail.com)
-	 *
-	 * This function must be called only when we know that prevent_sleep state
-	 * has been changed while the screen off.
-	 */
-	if (data->prevent_sleep) {
-		// we have been with wake irqs so far [enable_irq_wake()]
-		disable_irq_wake(data->client->irq);
-		disable_irq(data->client->irq);
-#if DT2W_DEBUG
-		pr_info("%s: IRQ now disable_irq_wake()\n", __func__);
-		pr_info("%s: IRQ now disable_irq()\n", __func__);
-		pr_info("%s: Rebalanced IRQ while dt2w OFF "
-				"during screen-off\n", __func__);
-#endif
-	} else {
-		// we have been with irqs so far [disable_irq()]
-		enable_irq(data->client->irq);
-		enable_irq_wake(data->client->irq);
-#if DT2W_DEBUG
-		pr_info("%s: IRQ now enable_irq()\n", __func__);
-		pr_info("%s: IRQ now enable_irq_wake()\n", __func__);
-		pr_info("%s: Rebalanced IRQ while dt2w ON "
-				"during screen-off\n", __func__);
-#endif
-	}
-
-	return 0;
-}
-
 #ifdef CONFIG_PM
 static int ft5x06_ts_start(struct device *dev)
 {
 	struct ft5x06_ts_data *data = dev_get_drvdata(dev);
 	int err;
-	bool prevent_sleep = false;
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	ts_get_prevent_sleep(prevent_sleep);
-	if (prevent_sleep != data->prevent_sleep) {
-		/* 
-		 * Prema Chand Alugu (premaca@gmail.com)
-		 *
-		 * simply the rebalance requirement; the prevent_sleep state is
-		 * stored in the dev structure, if there is any change while
-		 * the screen was off, we definitely need to rebalance
-		 * the state could be changed by the following known events
-		 * 1. toggled has been modified while screen was off
-		 * 2. in_phone_call state changed while screen was off
-		 */
-	    dt2w_toggle_rebalance_irq(dev);
-	}
-#if DT2W_DEBUG
-	pr_info("%s: Prevent Sleep is computed as '%s'\n",
-			__func__, (prevent_sleep) ? "yes" : "no");
-#endif
-	/* enable the key panel touches back again */
-	__set_bit(EV_KEY, data->input_dev->evbit);
-	input_sync(data->input_dev);
-#endif
 
 	if (data->pdata->power_on) {
 		err = data->pdata->power_on(true);
@@ -1156,31 +1062,8 @@ static int ft5x06_ts_start(struct device *dev)
 
 	msleep(data->pdata->soft_rst_dly);
 
-#if CTP_CHARGER_DETECT
-	batt_psy = power_supply_get_by_name("usb");
-	if (!batt_psy) {
-		pr_err("%s: tp resume battery supply not found\n", __func__);
-	} else {
-		is_charger_plug = (u8)power_supply_get_battery_charge_state(batt_psy);
-		pr_debug("%s: is_charger_plug %d, prev %d", __func__, is_charger_plug, pre_charger_status);
-		ft5x0x_write_reg(data->client, 0x8B, is_charger_plug);
-	}
-	pre_charger_status = is_charger_plug;
-#endif
-	if (prevent_sleep) {
-#if DT2W_DEBUG
-		pr_info("%s: IRQ now disable_irq_wake()\n", __func__);
-#endif
-		disable_irq_wake(data->client->irq);
-	} else {
-#if DT2W_DEBUG
-		pr_info("%s: IRQ now enable_irq()\n", __func__);
-#endif
-		enable_irq(data->client->irq);
-	}
-
+	enable_irq(data->client->irq);
 	data->suspended = false;
-	data->prevent_sleep = prevent_sleep;
 
 	return 0;
 
@@ -1209,27 +1092,7 @@ static int ft5x06_ts_stop(struct device *dev)
 	char txbuf[2];
 	int i, err;
 
-	bool prevent_sleep = false;
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	ts_get_prevent_sleep(prevent_sleep);
-#if DT2W_DEBUG
-	pr_info("%s: Prevent Sleep is computed as '%s'\n",
-			__func__, (prevent_sleep) ? "yes" : "no");
-#endif
-#endif
-	if (!prevent_sleep) {
-#if DT2W_DEBUG
-		pr_info("%s: IRQ now disable_irq()\n", __func__);
-#endif
-		disable_irq(data->client->irq);
-		dit_suspend = false;
-	} else {
-#if DT2W_DEBUG
-		pr_info("%s: IRQ now enable_irq_wake()\n", __func__);
-#endif
-		enable_irq_wake(data->client->irq);
-		dit_suspend = true;
-	}
+	disable_irq(data->client->irq);
 
 	/* release all touches */
 	for (i = 0; i < data->pdata->num_max_touches; i++) {
@@ -1241,8 +1104,7 @@ static int ft5x06_ts_stop(struct device *dev)
 
 	if (gpio_is_valid(data->pdata->reset_gpio)) {
 		txbuf[0] = FT_REG_PMODE;
-		txbuf[1] = (!prevent_sleep) ? FT_PMODE_HIBERNATE :
-			FT_PMODE_MONITOR;
+		txbuf[1] = FT_PMODE_HIBERNATE;
 		ft5x06_i2c_write(data->client, txbuf, sizeof(txbuf));
 	}
 
@@ -1275,15 +1137,6 @@ static int ft5x06_ts_stop(struct device *dev)
 	}
 
 	data->suspended = true;
-
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	if (prevent_sleep) {
-		/* disable the key panel touches */
-		__clear_bit(EV_KEY, data->input_dev->evbit);
-		input_sync(data->input_dev);
-	}
-	data->prevent_sleep = prevent_sleep;
-#endif
 
 	return 0;
 
@@ -1433,7 +1286,6 @@ static int ft5x06_ts_resume(struct device *dev)
 #endif
 
 #if defined(CONFIG_FB)
-static bool unblanked_once = false;
 static int fb_notifier_callback(struct notifier_block *self,
 				 unsigned long event, void *data)
 {
@@ -1445,20 +1297,10 @@ static int fb_notifier_callback(struct notifier_block *self,
 	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
 			ft5x06_data && ft5x06_data->client) {
 		blank = evdata->data;
-		if (*blank == FB_BLANK_UNBLANK) {
-			if (unblanked_once) {
-#if DT2W_DEBUG
-				pr_info("ft5x06 resume!\n");
-#endif
-				ft5x06_ts_resume(&ft5x06_data->client->dev);
-			}
-		} else if (*blank == FB_BLANK_POWERDOWN) {
-			unblanked_once = true;
-#if DT2W_DEBUG
-			pr_info("ft5x06 suspend!\n");
-#endif
+		if (*blank == FB_BLANK_UNBLANK)
+			ft5x06_ts_resume(&ft5x06_data->client->dev);
+		else if (*blank == FB_BLANK_POWERDOWN)
 			ft5x06_ts_suspend(&ft5x06_data->client->dev);
-		}
 	}
 
 	return 0;
@@ -2415,11 +2257,7 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 	* the interrupt trigger mode will be set in Device Tree with property
 	* "interrupts", so here we just need to set the flag IRQF_ONESHOT
 	*/
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
 				IRQF_ONESHOT,
-#else
-				IRQF_ONESHOT | IRQF_NO_SUSPEND,
-#endif
 				client->dev.driver->name, data);
 	if (err) {
 		dev_err(&client->dev, "request irq failed\n");
@@ -2622,12 +2460,6 @@ static int ft5x06_ts_probe(struct i2c_client *client,
 	data->early_suspend.suspend = ft5x06_ts_early_suspend;
 	data->early_suspend.resume = ft5x06_ts_late_resume;
 	register_early_suspend(&data->early_suspend);
-#endif
-
-#if CTP_CHARGER_DETECT
-	batt_psy = power_supply_get_by_name("usb");
-	if (!batt_psy)
-		pr_err("%s: tp battery supply not found\n", __func__);
 #endif
 
 	return 0;

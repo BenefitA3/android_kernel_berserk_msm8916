@@ -51,6 +51,7 @@
 #include <linux/module.h>
 #include <linux/input/mt.h>
 #include <linux/debugfs.h>
+#include <linux/interrupt.h>
 
 #define GOODIX_DEV_NAME	"Goodix-CTP"
 #define CFG_MAX_TOUCH_POINTS	5
@@ -962,9 +963,8 @@ static int gtp_init_panel(struct goodix_ts_data *ts)
 		config_data[ts->gtp_cfg_len] = (~check_sum) + 1;
 
 	} else { /* DRIVER NOT SEND CONFIG */
-		ts->gtp_cfg_len = GTP_CONFIG_MAX_LENGTH;
-		ret = gtp_i2c_read(ts->client, config_data,
-			ts->gtp_cfg_len + GTP_ADDR_LENGTH);
+		ret = gtp_i2c_read_dbl_check(ts->client, GTP_REG_CONFIG_DATA, &opr_buf[2], sizeof(opr_buf)-4);
+		config_data = opr_buf;
 		if (ret < 0) {
 			dev_err(&client->dev,
 				"Read Config Failed, Using DEFAULT Resolution & INT Trigger!\n");
@@ -1181,7 +1181,7 @@ static int gtp_request_irq(struct goodix_ts_data *ts)
 
 	ret = request_threaded_irq(ts->client->irq, NULL,
 			goodix_ts_irq_handler,
-			irq_table[ts->int_trigger_type],
+			irq_table[ts->int_trigger_type] | IRQF_ONESHOT,
 			ts->client->name, ts);
 	if (ret) {
 		ts->use_irq = false;

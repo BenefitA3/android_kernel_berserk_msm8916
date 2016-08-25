@@ -6,11 +6,6 @@
 
 wm97xx-ts-y := wm97xx-core.o
 
-# for sweep2wake, leave 1st to avoid merge issues at the end of the file
-obj-$(CONFIG_TOUCHSCREEN_SWEEP2WAKE)                += sweep2wake.o
-# for doubletap2wake, leave 1st to avoid merge issues at the end of the file
-obj-$(CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE)        += doubletap2wake.o
-
 obj-$(CONFIG_TOUCHSCREEN_88PM860X)	+= 88pm860x-ts.o
 obj-$(CONFIG_TOUCHSCREEN_AD7877)	+= ad7877.o
 obj-$(CONFIG_TOUCHSCREEN_AD7879)	+= ad7879.o
@@ -37,6 +32,8 @@ obj-$(CONFIG_TOUCHSCREEN_EETI)		+= eeti_ts.o
 obj-$(CONFIG_TOUCHSCREEN_ELO)		+= elo.o
 obj-$(CONFIG_TOUCHSCREEN_EGALAX)	+= egalax_ts.o
 obj-$(CONFIG_TOUCHSCREEN_FUJITSU)	+= fujitsu_ts.o
+obj-$(CONFIG_TOUCHSCREEN_GSL1688E)	+= gsl_ts_driver.o gsl_ReadArrayData.o gsl_point_id.o
+obj-$(CONFIG_TOUCHSCREEN_GSL1688E_ARM64)	+= gsl_ts_driver.o gsl_ReadArrayData.o gsl_point_id_arm64.o
 obj-$(CONFIG_TOUCHSCREEN_GEN_VKEYS)	+= gen_vkeys.o
 obj-$(CONFIG_TOUCHSCREEN_ILI210X)	+= ili210x.o
 obj-$(CONFIG_TOUCHSCREEN_INEXIO)	+= inexio.o
@@ -89,6 +86,7 @@ obj-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4)		+= synaptics_i2c_rmi4.o
 
 obj-$(CONFIG_TOUCHSCREEN_GT9XX)		+= gt9xx/
 obj-$(CONFIG_TOUCHSCREEN_GT9XX_HQ)	+= gt9xx_hq/
+obj-$(CONFIG_TOUCHSCREEN_GT9XX_YL)	+= gt9xx_yl/
 obj-$(CONFIG_TOUCHSCREEN_BU21150)	+= bu21150.o
 obj-$(CONFIG_INPUT_MT_WRAPPER)		+= input_mt_wrapper.o
 obj-$(CONFIG_TOUCHSCREEN_IT7260_I2C)    += it7258_ts_i2c.o
@@ -101,3 +99,4 @@ obj-$(CONFIG_MACH_LONGCHEER)	+= lct_ctp_upgrade.o
 obj-$(CONFIG_MACH_LONGCHEER)	+= lct_if_ctp_upgrade.o
 
 obj-$(CONFIG_TOUCHSCREEN_MSG2XXX)	+= msg2xxx.o
+obj-$(CONFIG_MACH_YULONG)		+= touchscreen_yl.o

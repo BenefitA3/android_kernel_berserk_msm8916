@@ -21,14 +21,15 @@
  *        V1.6:new proc name
  */
 
-#include "gt9xx.h"
 #include <linux/mutex.h>
 #include <linux/proc_fs.h>
 #include <linux/debugfs.h>
 
+#include "gt9xx.h"
+
 #define DATA_LENGTH_UINT    512
 #define CMD_HEAD_LENGTH     (sizeof(struct st_cmd_head) - sizeof(u8 *))
-static char procname[20] = {0};
+//static char procname[20] = {0};
 
 struct st_cmd_head {
 	u8  wr;		/* write read flag 0:R 1:W 2:PID 3: */
@@ -60,7 +61,7 @@ static s32 (*tool_i2c_write)(u8 *, u16);
 
 s32 data_length;
 s8 ic_type[16] = {0};
-
+#if 0
 static void tool_set_proc_name(char *procname)
 {
 	char *months[12] = {"Jan", "Feb", "Mar", "Apr", "May",
@@ -84,63 +85,121 @@ static void tool_set_proc_name(char *procname)
 	snprintf(procname, 20, "gmnode%04d%02d%02d", n_year, n_month, n_day);
 	/* pr_debug("procname = %s", procname); */
 }
-
-static s32 tool_i2c_read_no_extra(u8 *buf, u16 len)
+#endif
+#define IIC_MAX_TRANSFER_SIZE    200 
+static s32 tool_i2c_read_no_extra(u8* buf, u16 len)
 {
-	s32 ret = -1;
-	u8 i = 0;
-	struct i2c_msg msgs[2] = {
-		{
-			.flags = !I2C_M_RD,
-			.addr  = gt_client->addr,
-			.len   = cmd_head.addr_len,
-			.buf   = &buf[0],
-		},
-		{
-			.flags = I2C_M_RD,
-			.addr  = gt_client->addr,
-			.len   = len,
-			.buf   = &buf[GTP_ADDR_LENGTH],
-		},
-	};
+    s32 ret = -1;
+    s32 i = 0;
+    s32 pos = 0;
+    s32 data_length = len;
+    s32 transfer_length = 0;
+    u16 addr = buf[0] << 8 | buf[1];
+    u8  addr_buf[2] = {buf[0], buf[1]};
+    u8  data[IIC_MAX_TRANSFER_SIZE];
+    struct i2c_msg msgs[2];
 
-	for (i = 0; i < cmd_head.retry; i++) {
-		ret = i2c_transfer(gt_client->adapter, msgs, 2);
-		if (ret > 0)
-			break;
-	}
+    msgs[0].flags = !I2C_M_RD;
+    msgs[0].addr  = gt_client->addr;
+    msgs[0].len   = cmd_head.addr_len;
+    msgs[0].buf   = &buf[0];
+    
+    msgs[1].flags = I2C_M_RD;
+    msgs[1].addr  = gt_client->addr;
+    msgs[1].len   = len;
+    msgs[1].buf   = &buf[GTP_ADDR_LENGTH];
 
-	if (i == cmd_head.retry) {
-		dev_err(&gt_client->dev, "I2C read retry limit over.\n");
-		ret = -EIO;
-	}
+    while(pos != data_length)
+    {
+        if ((data_length - pos) > IIC_MAX_TRANSFER_SIZE)
+        {
+            transfer_length = IIC_MAX_TRANSFER_SIZE;
+        }
+        else
+        {
+            transfer_length = data_length - pos;
+        }
+        addr_buf[0] = addr >> 8;
+        addr_buf[1] = addr & 0xFF;
 
-	return ret;
+        msgs[0].buf = addr_buf;
+        msgs[1].len = transfer_length;
+        msgs[1].buf = data;
+
+        for (i = 0; i < cmd_head.retry; i++)
+        {
+            ret=i2c_transfer(gt_client->adapter, msgs, 2);
+            if (ret > 0)
+            {
+                break;
+            }
+        }
+
+        if (ret > 0)
+        {
+            memcpy(&buf[pos + GTP_ADDR_LENGTH], data, transfer_length);
+            pos += transfer_length;
+            addr += transfer_length;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return ret;
 }
 
-static s32 tool_i2c_write_no_extra(u8 *buf, u16 len)
+
+static s32 tool_i2c_write_no_extra(u8* buf, u16 len)
 {
-	s32 ret = -1;
-	u8 i = 0;
-	struct i2c_msg msg = {
-		.flags = !I2C_M_RD,
-		.addr  = gt_client->addr,
-		.len   = len,
-		.buf   = buf,
-	};
+    s32 ret = -1;
+    s32 i = 0;
+    s32 pos = 0;
+    s32 transfer_length = 0;
+    s32 data_length = (s32)len - GTP_ADDR_LENGTH;
+    struct i2c_msg msg;
+    u8 data[IIC_MAX_TRANSFER_SIZE];
+    u16 addr = buf[0] << 8 | buf[1];
 
-	for (i = 0; i < cmd_head.retry; i++) {
-		ret = i2c_transfer(gt_client->adapter, &msg, 1);
-		if (ret > 0)
-			break;
-	}
+    msg.flags = !I2C_M_RD;
+    msg.addr  = gt_client->addr;
+  //  msg.len   = len;
+  //  msg.buf   = buf;
 
-	if (i == cmd_head.retry) {
-		dev_err(&gt_client->dev, "I2C write retry limit over.\n");
-		ret = -EIO;
-	}
+    while(pos != data_length)
+    {
+        if ((data_length - pos) > IIC_MAX_TRANSFER_SIZE)
+        {
+            transfer_length = IIC_MAX_TRANSFER_SIZE;
+        }
+        else
+        {
+            transfer_length = data_length - pos;
+        }
+        data[0] = addr >> 8;
+        data[1] = addr & 0xFF;
+        memcpy(&data[GTP_ADDR_LENGTH], &buf[pos + GTP_ADDR_LENGTH], transfer_length);
+        pos += transfer_length;
+        addr += transfer_length;
 
-	return ret;
+        msg.len = transfer_length + GTP_ADDR_LENGTH;
+        msg.buf = data;
+
+        for (i = 0; i < cmd_head.retry; i++)
+        {
+            ret=i2c_transfer(gt_client->adapter, &msg, 1);
+            if (ret > 0)
+            {
+                break;
+            }
+        }
+
+        if (ret <= 0)
+        {
+            break;
+        }
+    }
+    return ret;
 }
 
 static s32 tool_i2c_read_with_extra(u8 *buf, u16 len)
@@ -310,7 +369,7 @@ Output:
 static ssize_t goodix_tool_write(struct file *filp, const char __user *userbuf,
 						size_t count, loff_t *ppos)
 {
-	ssize_t ret = 0;
+	s32 ret = 0;
 
 	mutex_lock(&lock);
 	ret = copy_from_user(&cmd_head, userbuf, CMD_HEAD_LENGTH);
@@ -384,9 +443,9 @@ static ssize_t goodix_tool_write(struct file *filp, const char __user *userbuf,
 		}
 
 		if (cmd_head.data_len > sizeof(ic_type)) {
-			/*dev_err(&gt_client->dev,
-				"data len %d > data buff %lu rejected!\n",
-				cmd_head.data_len, sizeof(ic_type));*/
+			dev_err(&gt_client->dev,
+				"data len %d > data buff %zu, rejected!\n",
+				cmd_head.data_len, sizeof(ic_type));
 			ret = -EINVAL;
 			goto exit;
 		}
@@ -402,17 +461,24 @@ static ssize_t goodix_tool_write(struct file *filp, const char __user *userbuf,
 	} else if (cmd_head.wr == GTP_RW_DISABLE_IRQ) { /* disable irq! */
 		gtp_irq_disable(i2c_get_clientdata(gt_client));
 
-		#if GTP_ESD_PROTECT
+
+/* begin to transplant TW GTP_ESD_PROTECT code from 8675_C00 when write disable irq, switch off esd protect by liushilong@yulong.com on 2014-11-6 11:10*/
+#if GTP_ESD_PROTECT
 		gtp_esd_switch(gt_client, SWITCH_OFF);
-		#endif
+#endif
+/* end to transplant TW GTP_ESD_PROTECT code from 8675_C00 when write disable irq, switch off esd protect by liushilong@yulong.com on 2014-11-6 11:10*/
+
 		ret = CMD_HEAD_LENGTH;
 		goto exit;
 	} else if (cmd_head.wr == GTP_RW_ENABLE_IRQ) { /* enable irq! */
 		gtp_irq_enable(i2c_get_clientdata(gt_client));
 
-		#if GTP_ESD_PROTECT
+/* begin to transplant TW GTP_ESD_PROTECT code from 8675_C00 when write enable irq, switch on esd protect by liushilong@yulong.com on 2014-11-6 11:10*/
+#if GTP_ESD_PROTECT
 		gtp_esd_switch(gt_client, SWITCH_ON);
-		#endif
+#endif
+/* end to transplant TW GTP_ESD_PROTECT code from 8675_C00 when write disable irq, switch off esd protect by liushilong@yulong.com on 2014-11-6 11:10*/
+
 		ret = CMD_HEAD_LENGTH;
 		goto exit;
 	} else if (cmd_head.wr == GTP_RW_CHECK_RAWDIFF_MODE) {
@@ -432,9 +498,7 @@ static ssize_t goodix_tool_write(struct file *filp, const char __user *userbuf,
 		}
 		ret = CMD_HEAD_LENGTH;
 		goto exit;
-	}
-#ifdef CONFIG_GT9XX_TOUCHPANEL_UPDATE	
-	 else if (cmd_head.wr == GTP_RW_ENTER_UPDATE_MODE) {
+	} else if (cmd_head.wr == GTP_RW_ENTER_UPDATE_MODE) {
 		/* Enter update mode! */
 		if (gup_enter_update_mode(gt_client) ==  FAIL) {
 			ret = -EBUSY;
@@ -442,7 +506,7 @@ static ssize_t goodix_tool_write(struct file *filp, const char __user *userbuf,
 		}
 	} else if (cmd_head.wr == GTP_RW_LEAVE_UPDATE_MODE) {
 		/* Leave update mode! */
-		gup_leave_update_mode(gt_client);
+		gup_leave_update_mode();
 	} else if (cmd_head.wr == GTP_RW_UPDATE_FW) {
 		/* Update firmware! */
 		show_len = 0;
@@ -462,7 +526,6 @@ static ssize_t goodix_tool_write(struct file *filp, const char __user *userbuf,
 			goto exit;
 		}
 	}
-#endif
 	ret = CMD_HEAD_LENGTH;
 
 exit:
@@ -482,7 +545,7 @@ static ssize_t goodix_tool_read(struct file *file, char __user *user_buf,
 					size_t count, loff_t *ppos)
 {
 	u16 data_len = 0;
-	ssize_t ret;
+	s32 ret;
 	u8 buf[32];
 
 	mutex_lock(&lock);
@@ -589,15 +652,13 @@ s32 init_wr_node(struct i2c_client *client)
 	register_i2c_func();
 
 	mutex_init(&lock);
-	tool_set_proc_name(procname);
-	goodix_proc_entry = proc_create(procname,
-			S_IWUSR | S_IWGRP | S_IRUSR | S_IRGRP,
-			goodix_proc_entry,
-			&goodix_proc_fops);
+	//tool_set_proc_name(procname);
+	goodix_proc_entry = proc_create("goodix_tool", 0666, goodix_proc_entry, &goodix_proc_fops);
 	if (goodix_proc_entry == NULL) {
 		dev_err(&client->dev, "Couldn't create proc entry!");
 		return FAIL;
 	}
+    printk("[GTP] create proc entry!\n");
 
 	return SUCCESS;
 }
