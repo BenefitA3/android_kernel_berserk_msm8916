@@ -150,7 +150,7 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 		goto out;
 
 	/* No partial writes. */
-	length = -EINVAL;
+	length = EINVAL;
 	if (*ppos != 0)
 		goto out;
 
@@ -166,12 +166,6 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 	length = -EINVAL;
 	if (sscanf(page, "%d", &new_value) != 1)
 		goto out;
-
-#if defined(CONFIG_SECURITY_SELINUX_ALWAYS_ENFORCE)
-	new_value = 1;
-#elif defined(CONFIG_SECURITY_SELINUX_NEVER_ENFORCE)
-	new_value = 0;
-#endif
 
 	if (new_value != selinux_enforcing) {
 		length = task_has_security(current, SECURITY__SETENFORCE);
